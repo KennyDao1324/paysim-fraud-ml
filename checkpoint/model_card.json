@@ -10,7 +10,10 @@
     "random_seed": 42,
     "logistic_max_iter": 400,
     "random_forest_trees": 120,
-    "random_forest_max_depth": 12
+    "random_forest_max_depth": 12,
+    "xgboost_estimators": 500,
+    "xgboost_max_depth": 7,
+    "xgboost_learning_rate": 0.05
   },
   "selected_model": "random_forest",
   "selection_metric": "validation_pr_auc",

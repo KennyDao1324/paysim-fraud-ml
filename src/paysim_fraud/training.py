@@ -15,6 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import ConfusionMatrixDisplay, PrecisionRecallDisplay
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from xgboost import XGBClassifier
 
 from .config import PROJECT_ROOT, load_config
 from .data import MODEL_COLUMNS, load_raw, prepare_splits, save_processed
@@ -43,7 +44,7 @@ def build_preprocessor() -> ColumnTransformer:
     )
 
 
-def candidate_models(config: dict) -> dict[str, Pipeline]:
+def candidate_models(config: dict, positive_weight: float = 1.0) -> dict[str, Pipeline]:
     seed = int(config["random_seed"])
     return {
         "logistic_regression": Pipeline(
@@ -75,6 +76,29 @@ def candidate_models(config: dict) -> dict[str, Pipeline]:
                 ),
             ]
         ),
+        "xgboost": Pipeline(
+            [
+                ("preprocessor", build_preprocessor()),
+                (
+                    "classifier",
+                    XGBClassifier(
+                        n_estimators=int(config["xgboost_estimators"]),
+                        max_depth=int(config["xgboost_max_depth"]),
+                        learning_rate=float(config["xgboost_learning_rate"]),
+                        min_child_weight=5,
+                        subsample=0.85,
+                        colsample_bytree=0.85,
+                        reg_lambda=2.0,
+                        scale_pos_weight=positive_weight,
+                        objective="binary:logistic",
+                        eval_metric="aucpr",
+                        tree_method="hist",
+                        n_jobs=4,
+                        random_state=seed,
+                    ),
+                ),
+            ]
+        ),
     }
 
 
@@ -87,7 +111,8 @@ def fit_candidates(
     probabilities = {}
     thresholds = {}
     rows = []
-    for name, model in candidate_models(config).items():
+    positive_weight = float((y_train == 0).sum() / max(1, (y_train == 1).sum()))
+    for name, model in candidate_models(config, positive_weight).items():
         model.fit(x_train, y_train)
         probability = model.predict_proba(x_validation)[:, 1]
         threshold = best_f1_threshold(y_validation, probability)
@@ -120,7 +145,9 @@ def save_plots(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     figure, axis = plt.subplots(figsize=(7, 4))
-    axis.bar(comparison["model"], comparison["pr_auc"], color=["#2563eb", "#0f766e"])
+    axis.bar(
+        comparison["model"], comparison["pr_auc"], color=["#2563eb", "#0f766e", "#b45309"]
+    )
     axis.set_ylabel("Validation PR-AUC")
     axis.set_title("PaySim model comparison")
     figure.tight_layout()
@@ -177,10 +204,14 @@ def train(config_path: str | Path) -> dict:
 
     x_train, y_train = splits["train"]
     x_validation, y_validation = splits["validation"]
-    production_model = candidate_models(config)[winner]
+    development_target = pd.concat([y_train, y_validation], ignore_index=True)
+    development_weight = float(
+        (development_target == 0).sum() / max(1, (development_target == 1).sum())
+    )
+    production_model = candidate_models(config, development_weight)[winner]
     production_model.fit(
         pd.concat([x_train, x_validation], ignore_index=True),
-        pd.concat([y_train, y_validation], ignore_index=True),
+        development_target,
     )
     bundle = {
         "model": production_model,

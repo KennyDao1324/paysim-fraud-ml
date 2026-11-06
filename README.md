@@ -1,8 +1,8 @@
 # PaySim Mobile-Money Fraud Detection ML
 
 This is a standalone, ML-only project for the PaySim synthetic mobile-money dataset. It uses chronological
-train/validation/test periods, compares class-weighted logistic regression and random forest models, selects
-the winner by validation PR-AUC, and evaluates it once on the held-out test period.
+train/validation/test periods, compares class-weighted logistic regression, random forest, and XGBoost,
+selects the winner by validation PR-AUC, and evaluates it once on the held-out test period.
 
 ## Dataset source
 
@@ -103,7 +103,7 @@ Python package, and the workflow entrypoints call the shared implementation unde
 After training, [open the evaluation guide](evaluation/README.md) or the `outputs/` folder. Expected files:
 
 - `dataset_profile.json`: provenance, SHA-256, row counts, fraud rate, and missing values
-- `model_comparison.csv`: validation metrics for both models
+- `model_comparison.csv`: validation metrics for all candidate models
 - `metrics.json`: selected model and held-out test metrics
 - `test_predictions.csv`: held-out labels and fraud scores
 - `model_comparison.png`
@@ -116,6 +116,8 @@ After training, [open the evaluation guide](evaluation/README.md) or the `output
 Random forest was selected by validation PR-AUC. The held-out 50,000-row test sample produced PR-AUC
 0.3069, ROC-AUC 0.8529, precision 0.8297, and recall 0.2257. See [all evaluation files](outputs/) and the
 [evaluation guide with chart previews](evaluation/README.md).
+XGBoost was evaluated as a third candidate, but its validation PR-AUC (0.2532) did not exceed the random
+forest result (0.2911), so it was not selected.
 
 ![PaySim model comparison](outputs/model_comparison.png)
 
